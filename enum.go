@@ -7,6 +7,13 @@ const (
 	PSS      SignTypeEnum = "PSS"
 )
 
+type CryptoPaddingEnum string
+
+const (
+	PKCS1v15Padding CryptoPaddingEnum = "PKCS1v15"
+	OAEPPadding     CryptoPaddingEnum = "OAEP"
+)
+
 type HashTypeEnum string
 
 const (

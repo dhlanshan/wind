@@ -19,12 +19,13 @@ import (
 )
 
 type Rsa struct {
-	bits        RsaKeySizeEnum
-	privateKey  *rsa.PrivateKey
-	publicKey   *rsa.PublicKey
-	certificate *x509.Certificate
+	bits        RsaKeySizeEnum    // Key size (e.g., 2048, 4096)
+	privateKey  *rsa.PrivateKey   // Private RSA key
+	publicKey   *rsa.PublicKey    // Public RSA key
+	certificate *x509.Certificate // Certificate corresponding to the public key
 }
 
+// GenerateKey generates a new RSA key pair with the specified key size.
 func (r *Rsa) GenerateKey(bits RsaKeySizeEnum) error {
 	privateKey, err := rsa.GenerateKey(rand.Reader, int(bits))
 	if err != nil {
@@ -38,6 +39,7 @@ func (r *Rsa) GenerateKey(bits RsaKeySizeEnum) error {
 	return nil
 }
 
+// LoadKey loads an RSA private/public key pair from a PEM-encoded byte slice.
 func (r *Rsa) LoadKey(keyPem []byte) error {
 	privateKey, publicKey, err := r.parseKey(keyPem)
 	if err != nil {
@@ -56,6 +58,7 @@ func (r *Rsa) LoadKey(keyPem []byte) error {
 	return nil
 }
 
+// LoadKeyByFile loads an RSA private/public key pair from a PEM-encoded file.
 func (r *Rsa) LoadKeyByFile(keyFile string) error {
 	if keyFile == "" {
 		return errors.New("keyFile is empty")
@@ -68,6 +71,7 @@ func (r *Rsa) LoadKeyByFile(keyFile string) error {
 	return r.LoadKey(keyPem)
 }
 
+// GetKey retrieves the private and public keys in PEM format.
 func (r *Rsa) GetKey(format KeyFormatEnum) (priKey, pubKey string, err error) {
 	if r.privateKey == nil || r.publicKey == nil {
 		return "", "", errors.New("private key or public key is nil")
@@ -84,6 +88,7 @@ func (r *Rsa) GetKey(format KeyFormatEnum) (priKey, pubKey string, err error) {
 	return
 }
 
+// SaveKey saves the private and public keys to files in PEM format.
 func (r *Rsa) SaveKey(format KeyFormatEnum, dir, filename string) (err error) {
 	if r.privateKey == nil || r.publicKey == nil {
 		return errors.New("private key or public key is nil")
@@ -123,6 +128,7 @@ func (r *Rsa) SaveKey(format KeyFormatEnum, dir, filename string) (err error) {
 	return
 }
 
+// GenSerialNumber generates a random serial number for the certificate.
 func (r *Rsa) GenSerialNumber() *big.Int {
 	maxNum := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
 	serialNumber, _ := rand.Int(rand.Reader, maxNum)
@@ -130,6 +136,7 @@ func (r *Rsa) GenSerialNumber() *big.Int {
 	return serialNumber
 }
 
+// BuildCert generates a certificate from a template and signs it with the parent's private key.
 func (r *Rsa) BuildCert(template, parentCert *x509.Certificate, parentPrivateKey *rsa.PrivateKey) error {
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, parentCert, r.publicKey, parentPrivateKey)
 	if err != nil {
@@ -144,6 +151,7 @@ func (r *Rsa) BuildCert(template, parentCert *x509.Certificate, parentPrivateKey
 	return nil
 }
 
+// LoadCert loads an RSA certificate from a PEM-encoded byte slice.
 func (r *Rsa) LoadCert(certPEM []byte) error {
 	block, _ := pem.Decode(certPEM)
 	cert, err := x509.ParseCertificate(block.Bytes)
@@ -155,6 +163,7 @@ func (r *Rsa) LoadCert(certPEM []byte) error {
 	return nil
 }
 
+// LoadCertByFile loads an RSA certificate from a PEM-encoded file.
 func (r *Rsa) LoadCertByFile(certFile string) error {
 	if certFile == "" {
 		return errors.New("certFile is empty")
@@ -167,6 +176,7 @@ func (r *Rsa) LoadCertByFile(certFile string) error {
 	return r.LoadCert(certPEM)
 }
 
+// GetCert retrieves the certificate in PEM format.
 func (r *Rsa) GetCert() (cert string, err error) {
 	if r.certificate == nil {
 		return "", errors.New("certificate is nil")
@@ -174,6 +184,7 @@ func (r *Rsa) GetCert() (cert string, err error) {
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.certificate.Raw})), nil
 }
 
+// SaveCert saves the certificate to a file in PEM format.
 func (r *Rsa) SaveCert(dir, filename string) error {
 	if r.certificate == nil {
 		return errors.New("certificate is nil")
@@ -195,6 +206,7 @@ func (r *Rsa) SaveCert(dir, filename string) error {
 	return pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: r.certificate.Raw})
 }
 
+// Sign signs a message using the private key, the specified signing type, hash type, and format.
 func (r *Rsa) Sign(msg []byte, signType SignTypeEnum, hashType HashTypeEnum, format FormatEnum, opts *rsa.PSSOptions) (ciphertext string, err error) {
 	if len(msg) == 0 {
 		return "", errors.New("message is empty")
@@ -221,12 +233,16 @@ func (r *Rsa) Sign(msg []byte, signType SignTypeEnum, hashType HashTypeEnum, for
 	case PSS:
 		signData, err = rsa.SignPSS(rand.Reader, r.privateKey, sha, hashed, opts)
 	}
+	if err != nil {
+		return "", err
+	}
 
 	ciphertext = util.PackDataToStr(signData, string(format))
 
 	return
 }
 
+// VerifySign verifies the signature of a message using the public key, the signature, and the specified hash type and format.
 func (r *Rsa) VerifySign(msg []byte, ciphertext string, signType SignTypeEnum, hashType HashTypeEnum, format FormatEnum, opts *rsa.PSSOptions) (err error) {
 	if len(msg) == 0 || ciphertext == "" {
 		return errors.New("msg or ciphertext is empty")
@@ -261,6 +277,84 @@ func (r *Rsa) VerifySign(msg []byte, ciphertext string, signType SignTypeEnum, h
 	return
 }
 
+// Encrypt encrypts the given plaintext using RSA public key with specified padding, hash type, and format.
+// It returns the ciphertext as a string or an error if any issue occurs during encryption.
+func (r *Rsa) Encrypt(plainText []byte, padding CryptoPaddingEnum, hashType HashTypeEnum, format FormatEnum, label []byte) (ciphertext string, err error) {
+	if len(plainText) == 0 {
+		return "", errors.New("plainText is empty")
+	}
+	if !tool.InSlice([]CryptoPaddingEnum{PKCS1v15Padding, OAEPPadding}, padding) {
+		return "", errors.New("invalid padding")
+	}
+	if !tool.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
+		return "", errors.New("invalid format")
+	}
+	if r.publicKey == nil {
+		return "", errors.New("public key is nil")
+	}
+
+	hashMap := map[HashTypeEnum]crypto.Hash{Sha1: crypto.SHA1, Sha256: crypto.SHA256, Sha512: crypto.SHA512}
+	sha, ok := hashMap[hashType]
+	if !ok {
+		return "", errors.New("invalid hash type")
+	}
+
+	var cipherByte []byte
+	switch padding {
+	case OAEPPadding:
+		cipherByte, err = rsa.EncryptOAEP(sha.New(), rand.Reader, r.publicKey, plainText, label)
+	case PKCS1v15Padding:
+		cipherByte, err = rsa.EncryptPKCS1v15(rand.Reader, r.publicKey, plainText)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	ciphertext = util.PackDataToStr(cipherByte, string(format))
+	return
+}
+
+// Decrypt decrypts the given ciphertext using RSA private key with specified padding, hash type, and format.
+// It returns the plaintext or an error if any issue occurs during decryption.
+func (r *Rsa) Decrypt(ciphertext string, padding CryptoPaddingEnum, hashType HashTypeEnum, format FormatEnum, label []byte) (plainText []byte, err error) {
+	if ciphertext == "" {
+		return nil, errors.New("ciphertext is empty")
+	}
+	if !tool.InSlice([]CryptoPaddingEnum{PKCS1v15Padding, OAEPPadding}, padding) {
+		return nil, errors.New("invalid padding")
+	}
+	if !tool.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
+		return nil, errors.New("invalid format")
+	}
+	if r.privateKey == nil {
+		return nil, errors.New("private key is nil")
+	}
+
+	cipherByte, err := util.PackDataToByte(ciphertext, string(format))
+	if err != nil {
+		return nil, err
+	}
+
+	hashMap := map[HashTypeEnum]crypto.Hash{Sha1: crypto.SHA1, Sha256: crypto.SHA256, Sha512: crypto.SHA512}
+	sha, ok := hashMap[hashType]
+	if !ok {
+		return nil, errors.New("invalid hash type")
+	}
+
+	switch padding {
+	case OAEPPadding:
+		plainText, err = rsa.DecryptOAEP(sha.New(), rand.Reader, r.privateKey, cipherByte, label)
+	case PKCS1v15Padding:
+		plainText, err = rsa.DecryptPKCS1v15(rand.Reader, r.privateKey, cipherByte)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return
+}
+
+// marshalKey marshals the private and public keys into PEM format based on the provided key format.
 func (r *Rsa) marshalKey(format KeyFormatEnum) (priBlock, pubBlock *pem.Block, err error) {
 	var priKeyDer []byte
 	var pubKeyDer []byte
@@ -292,6 +386,7 @@ func (r *Rsa) marshalKey(format KeyFormatEnum) (priBlock, pubBlock *pem.Block, e
 	return
 }
 
+// parseKey parses a PEM-encoded key and returns the corresponding private and public keys.
 func (r *Rsa) parseKey(keyPem []byte) (privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey, err error) {
 	block, _ := pem.Decode(keyPem)
 	if block == nil {
@@ -329,6 +424,7 @@ func (r *Rsa) parseKey(keyPem []byte) (privateKey *rsa.PrivateKey, publicKey *rs
 	return
 }
 
+// hashData hashes the input message using the specified hash type.
 func (r *Rsa) hashData(msg []byte, hashType HashTypeEnum) (hashed []byte, sha crypto.Hash, err error) {
 	switch hashType {
 	case Sha1:
