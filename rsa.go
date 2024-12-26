@@ -18,17 +18,19 @@ import (
 )
 
 type Rsa struct {
-	Bits        RsaKeySizeEnum    // 秘钥大小
-	privateKey  *rsa.PrivateKey   // 私钥
-	publicKey   *rsa.PublicKey    // 公钥
-	certificate *x509.Certificate // 证书
+	bits        RsaKeySizeEnum
+	privateKey  *rsa.PrivateKey
+	publicKey   *rsa.PublicKey
+	certificate *x509.Certificate
 }
 
-func (r *Rsa) GenerateKey() error {
-	privateKey, err := rsa.GenerateKey(rand.Reader, int(r.Bits))
+func (r *Rsa) GenerateKey(bits RsaKeySizeEnum) error {
+	privateKey, err := rsa.GenerateKey(rand.Reader, int(bits))
 	if err != nil {
 		return errors.New("failed to generate private key: " + err.Error())
 	}
+
+	r.bits = bits
 	r.privateKey = privateKey
 	r.publicKey = &privateKey.PublicKey
 
@@ -43,9 +45,11 @@ func (r *Rsa) LoadKey(keyPem []byte) error {
 	if privateKey != nil {
 		r.privateKey = privateKey
 		r.publicKey = &privateKey.PublicKey
+		r.bits = RsaKeySizeEnum(r.privateKey.N.BitLen())
 	}
 	if publicKey != nil {
 		r.publicKey = publicKey
+		r.bits = RsaKeySizeEnum(publicKey.N.BitLen())
 	}
 
 	return nil
