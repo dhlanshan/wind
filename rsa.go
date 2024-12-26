@@ -25,6 +25,21 @@ type Rsa struct {
 	certificate *x509.Certificate // Certificate corresponding to the public key
 }
 
+// GetPrivate returns the RSA private key.
+func (r *Rsa) GetPrivate() *rsa.PrivateKey {
+	return r.privateKey
+}
+
+// GetPublic returns the RSA public key.
+func (r *Rsa) GetPublic() *rsa.PublicKey {
+	return r.publicKey
+}
+
+// GetCert returns the X.509 certificate.
+func (r *Rsa) GetCert() *x509.Certificate {
+	return r.certificate
+}
+
 // GenerateKey generates a new RSA key pair with the specified key size.
 func (r *Rsa) GenerateKey(bits RsaKeySizeEnum) error {
 	privateKey, err := rsa.GenerateKey(rand.Reader, int(bits))
@@ -71,8 +86,8 @@ func (r *Rsa) LoadKeyByFile(keyFile string) error {
 	return r.LoadKey(keyPem)
 }
 
-// GetKey retrieves the private and public keys in PEM format.
-func (r *Rsa) GetKey(format KeyFormatEnum) (priKey, pubKey string, err error) {
+// GetKeyStr retrieves the private and public keys in PEM format.
+func (r *Rsa) GetKeyStr(format KeyFormatEnum) (priKey, pubKey string, err error) {
 	if r.privateKey == nil || r.publicKey == nil {
 		return "", "", errors.New("private key or public key is nil")
 	}
@@ -176,8 +191,8 @@ func (r *Rsa) LoadCertByFile(certFile string) error {
 	return r.LoadCert(certPEM)
 }
 
-// GetCert retrieves the certificate in PEM format.
-func (r *Rsa) GetCert() (cert string, err error) {
+// GetCertStr retrieves the certificate in PEM format.
+func (r *Rsa) GetCertStr() (cert string, err error) {
 	if r.certificate == nil {
 		return "", errors.New("certificate is nil")
 	}
