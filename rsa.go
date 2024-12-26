@@ -15,6 +15,7 @@ import (
 	"github.com/dhlanshan/wind/internal/util"
 	"math/big"
 	"os"
+	"path/filepath"
 )
 
 type Rsa struct {
@@ -100,7 +101,7 @@ func (r *Rsa) SaveKey(format KeyFormatEnum, dir, filename string) (err error) {
 	}
 
 	priFn := fmt.Sprintf("%s_private_key.pem", filename)
-	priFile, err := os.Create(dir + "/" + priFn)
+	priFile, err := os.Create(filepath.Join(dir, priFn))
 	if err != nil {
 		return err
 	}
@@ -110,7 +111,7 @@ func (r *Rsa) SaveKey(format KeyFormatEnum, dir, filename string) (err error) {
 	}
 
 	pubFn := fmt.Sprintf("%s_public_key.pem", filename)
-	pubFile, err := os.Create(dir + "/" + pubFn)
+	pubFile, err := os.Create(filepath.Join(dir, pubFn))
 	if err != nil {
 		return err
 	}
@@ -123,7 +124,8 @@ func (r *Rsa) SaveKey(format KeyFormatEnum, dir, filename string) (err error) {
 }
 
 func (r *Rsa) GenSerialNumber() *big.Int {
-	serialNumber, _ := rand.Int(rand.Reader, new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1)))
+	maxNum := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+	serialNumber, _ := rand.Int(rand.Reader, maxNum)
 
 	return serialNumber
 }
@@ -184,7 +186,7 @@ func (r *Rsa) SaveCert(dir, filename string) error {
 	}
 
 	certFn := fmt.Sprintf("%s_cert.pem", filename)
-	certFile, err := os.Create(dir + "/" + certFn)
+	certFile, err := os.Create(filepath.Join(dir, certFn))
 	if err != nil {
 		return err
 	}
