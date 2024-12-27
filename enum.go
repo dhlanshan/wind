@@ -1,5 +1,16 @@
 package wind
 
+type PaddingEnum int
+
+const (
+	NoPadding PaddingEnum = 1
+	PKCS5     PaddingEnum = 2
+	PKCS7     PaddingEnum = 3
+	ISO10126  PaddingEnum = 4
+	Zero      PaddingEnum = 5
+	ANISx923  PaddingEnum = 6
+)
+
 type SignTypeEnum string
 
 const (
