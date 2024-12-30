@@ -1,4 +1,4 @@
-package tool
+package tools
 
 func TernaryOperator[T any](exp bool, e1, e2 T) T {
 	if exp {

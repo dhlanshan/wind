@@ -4,13 +4,13 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
-	"github.com/dhlanshan/wind/internal/util"
+	"github.com/dhlanshan/wind/internal/utils"
 )
 
 type CBC struct{}
 
 // Encrypt 密码分组链接模式
-func (cbc *CBC) Encrypt(plainText, key, iv []byte, paddingType int) ([]byte, error) {
+func (cbc *CBC) Encrypt(plainText, key, iv, nonce, additionalData []byte, paddingType int) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func (cbc *CBC) Encrypt(plainText, key, iv []byte, paddingType int) ([]byte, err
 	}
 	blockMode := cipher.NewCBCEncrypter(block, iv)
 	// 补码
-	if plainText, err = util.Padding(plainText, blockSize, paddingType); err != nil {
+	if plainText, err = utils.Padding(plainText, blockSize, paddingType); err != nil {
 		return nil, err
 	}
 	cipherText := make([]byte, len(plainText))
@@ -31,7 +31,7 @@ func (cbc *CBC) Encrypt(plainText, key, iv []byte, paddingType int) ([]byte, err
 }
 
 // Decrypt 密码分组链接模式
-func (cbc *CBC) Decrypt(cipherText, key, iv []byte, paddingType int) ([]byte, error) {
+func (cbc *CBC) Decrypt(cipherText, key, iv, nonce, additionalData []byte, paddingType int) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func (cbc *CBC) Decrypt(cipherText, key, iv []byte, paddingType int) ([]byte, er
 	plainText := make([]byte, len(cipherText))
 	blockMode.CryptBlocks(plainText, cipherText)
 	// 解码
-	if plainText, err = util.UnPadding(plainText, paddingType); err != nil {
+	if plainText, err = utils.UnPadding(plainText, paddingType); err != nil {
 		return nil, err
 	}
 

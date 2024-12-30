@@ -11,8 +11,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/dhlanshan/wind/internal/tool"
-	"github.com/dhlanshan/wind/internal/util"
+	"github.com/dhlanshan/wind/internal/tools"
+	"github.com/dhlanshan/wind/internal/utils"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -169,6 +169,9 @@ func (r *Rsa) BuildCert(template, parentCert *x509.Certificate, parentPrivateKey
 // LoadCert loads an RSA certificate from a PEM-encoded byte slice.
 func (r *Rsa) LoadCert(certPEM []byte) error {
 	block, _ := pem.Decode(certPEM)
+	if block.Type != "CERTIFICATE" {
+		return errors.New("the kind of PEM should be CERTIFICATE")
+	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return err
@@ -226,10 +229,10 @@ func (r *Rsa) Sign(msg []byte, signType SignTypeEnum, hashType HashTypeEnum, for
 	if len(msg) == 0 {
 		return "", errors.New("message is empty")
 	}
-	if !tool.InSlice([]SignTypeEnum{PKCS1v15, PSS}, signType) {
+	if !tools.InSlice([]SignTypeEnum{PKCS1v15, PSS}, signType) {
 		return "", errors.New("invalid sign type")
 	}
-	if !tool.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
+	if !tools.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
 		return "", errors.New("invalid format")
 	}
 	if r.privateKey == nil {
@@ -252,7 +255,7 @@ func (r *Rsa) Sign(msg []byte, signType SignTypeEnum, hashType HashTypeEnum, for
 		return "", err
 	}
 
-	ciphertext = util.PackDataToStr(signData, string(format))
+	ciphertext = utils.PackDataToStr(signData, string(format))
 
 	return
 }
@@ -262,17 +265,17 @@ func (r *Rsa) VerifySign(msg []byte, ciphertext string, signType SignTypeEnum, h
 	if len(msg) == 0 || ciphertext == "" {
 		return errors.New("msg or ciphertext is empty")
 	}
-	if !tool.InSlice([]SignTypeEnum{PKCS1v15, PSS}, signType) {
+	if !tools.InSlice([]SignTypeEnum{PKCS1v15, PSS}, signType) {
 		return errors.New("invalid sign type")
 	}
-	if !tool.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
+	if !tools.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
 		return errors.New("invalid format")
 	}
 	if r.privateKey == nil {
 		return errors.New("private key is nil")
 	}
 
-	signData, err := util.PackDataToByte(ciphertext, string(format))
+	signData, err := utils.PackDataToByte(ciphertext, string(format))
 	if err != nil {
 		return err
 	}
@@ -298,10 +301,10 @@ func (r *Rsa) Encrypt(plainText []byte, padding CryptoPaddingEnum, hashType Hash
 	if len(plainText) == 0 {
 		return "", errors.New("plainText is empty")
 	}
-	if !tool.InSlice([]CryptoPaddingEnum{PKCS1v15Padding, OAEPPadding}, padding) {
+	if !tools.InSlice([]CryptoPaddingEnum{PKCS1v15Padding, OAEPPadding}, padding) {
 		return "", errors.New("invalid padding")
 	}
-	if !tool.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
+	if !tools.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
 		return "", errors.New("invalid format")
 	}
 	if r.publicKey == nil {
@@ -325,7 +328,7 @@ func (r *Rsa) Encrypt(plainText []byte, padding CryptoPaddingEnum, hashType Hash
 		return "", err
 	}
 
-	ciphertext = util.PackDataToStr(cipherByte, string(format))
+	ciphertext = utils.PackDataToStr(cipherByte, string(format))
 	return
 }
 
@@ -335,17 +338,17 @@ func (r *Rsa) Decrypt(ciphertext string, padding CryptoPaddingEnum, hashType Has
 	if ciphertext == "" {
 		return nil, errors.New("ciphertext is empty")
 	}
-	if !tool.InSlice([]CryptoPaddingEnum{PKCS1v15Padding, OAEPPadding}, padding) {
+	if !tools.InSlice([]CryptoPaddingEnum{PKCS1v15Padding, OAEPPadding}, padding) {
 		return nil, errors.New("invalid padding")
 	}
-	if !tool.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
+	if !tools.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
 		return nil, errors.New("invalid format")
 	}
 	if r.privateKey == nil {
 		return nil, errors.New("private key is nil")
 	}
 
-	cipherByte, err := util.PackDataToByte(ciphertext, string(format))
+	cipherByte, err := utils.PackDataToByte(ciphertext, string(format))
 	if err != nil {
 		return nil, err
 	}
@@ -379,10 +382,10 @@ func (r *Rsa) marshalKey(format KeyFormatEnum) (priBlock, pubBlock *pem.Block, e
 	switch format {
 	case PKCS1:
 		priKeyDer = x509.MarshalPKCS1PrivateKey(r.privateKey)
-		priType, pubType = "RSA PRIVATE KEY", "RSA PUBLIC KEY"
+		priType, pubType = string(PrivatePKCS1Pem), string(PublicPKCS1Pem)
 	case PKCS8:
 		priKeyDer, err = x509.MarshalPKCS8PrivateKey(r.privateKey)
-		priType, pubType = "PRIVATE KEY", "PUBLIC KEY"
+		priType, pubType = string(PrivatePKCS8Pem), string(PublicPKCS8Pem)
 	default:
 		err = fmt.Errorf("unsupported key format: %s", format)
 	}
@@ -409,7 +412,7 @@ func (r *Rsa) parseKey(keyPem []byte) (privateKey *rsa.PrivateKey, publicKey *rs
 	}
 
 	format := PemTypeEnum(block.Type)
-	if tool.InSlice(PrivatePemList(), format) {
+	if tools.InSlice(PrivatePemList(), format) {
 		switch format {
 		case PrivatePKCS1Pem:
 			privateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
@@ -422,7 +425,7 @@ func (r *Rsa) parseKey(keyPem []byte) (privateKey *rsa.PrivateKey, publicKey *rs
 		default:
 			err = fmt.Errorf("unsupported key format: %s", format)
 		}
-	} else if tool.InSlice(PublicPemList(), format) {
+	} else if tools.InSlice(PublicPemList(), format) {
 		var pub any
 		pub, err = x509.ParsePKIXPublicKey(block.Bytes)
 		if pk, ok := pub.(*rsa.PublicKey); ok {

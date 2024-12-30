@@ -8,13 +8,13 @@ import (
 type AesMode func(plainText, key, iv []byte, paddingType int) ([]byte, error)
 
 type AbstractMode interface {
-	Encrypt(plainText, key, iv []byte, paddingType int) ([]byte, error)
-	Decrypt(cipherText, key, iv []byte, paddingType int) ([]byte, error)
+	Encrypt(plainText, key, iv, nonce, additionalData []byte, paddingType int) ([]byte, error)
+	Decrypt(cipherText, key, iv, nonce, additionalData []byte, paddingType int) ([]byte, error)
 }
 
 var modeMap sync.Map
 var modeNameList []string
-var modeList = map[string]AbstractMode{"CBC": &aesMode.CBC{}, "ECB": &aesMode.ECB{}}
+var modeList = map[string]AbstractMode{"CBC": &aesMode.CBC{}, "ECB": &aesMode.ECB{}, "GCM": &aesMode.GCM{}}
 
 func init() {
 	for k, v := range modeList {

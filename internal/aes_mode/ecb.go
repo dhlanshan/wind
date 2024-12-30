@@ -2,20 +2,20 @@ package aesMode
 
 import (
 	"crypto/aes"
-	"github.com/dhlanshan/wind/internal/util"
+	"github.com/dhlanshan/wind/internal/utils"
 )
 
 type ECB struct{}
 
 // Encrypt 电子密码本模式
-func (ecb *ECB) Encrypt(plainText, key, iv []byte, paddingType int) ([]byte, error) {
+func (ecb *ECB) Encrypt(plainText, key, iv, nonce, additionalData []byte, paddingType int) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 	blockSize := block.BlockSize()
 	// 补码
-	if plainText, err = util.Padding(plainText, blockSize, paddingType); err != nil {
+	if plainText, err = utils.Padding(plainText, blockSize, paddingType); err != nil {
 		return nil, err
 	}
 	cipherText := make([]byte, len(plainText))
@@ -28,7 +28,7 @@ func (ecb *ECB) Encrypt(plainText, key, iv []byte, paddingType int) ([]byte, err
 }
 
 // Decrypt d
-func (ecb *ECB) Decrypt(cipherText, key, iv []byte, paddingType int) ([]byte, error) {
+func (ecb *ECB) Decrypt(cipherText, key, iv, nonce, additionalData []byte, paddingType int) ([]byte, error) {
 	// 块
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -42,7 +42,7 @@ func (ecb *ECB) Decrypt(cipherText, key, iv []byte, paddingType int) ([]byte, er
 	}
 
 	// 解码
-	if plainText, err = util.UnPadding(plainText, paddingType); err != nil {
+	if plainText, err = utils.UnPadding(plainText, paddingType); err != nil {
 		return nil, err
 	}
 

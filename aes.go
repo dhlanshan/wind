@@ -2,19 +2,21 @@ package wind
 
 import (
 	"errors"
-	"github.com/dhlanshan/wind/internal/tool"
-	"github.com/dhlanshan/wind/internal/util"
+	"github.com/dhlanshan/wind/internal/tools"
+	"github.com/dhlanshan/wind/internal/utils"
 )
 
 type Aes struct {
-	Mode    string
-	Key     string
-	Iv      string
-	Padding PaddingEnum
+	Mode           string
+	Key            string
+	Iv             string
+	Nonce          string
+	Padding        PaddingEnum
+	AdditionalData string
 }
 
 func (a *Aes) AddMode(modeName string, mode AbstractMode) error {
-	if tool.InSlice(modeNameList, modeName) {
+	if tools.InSlice(modeNameList, modeName) {
 		return errors.New("unable to modify the default mode")
 	}
 	modeMap.Store(modeName, mode)
@@ -32,12 +34,12 @@ func (a *Aes) Encrypt(plainText []byte, format FormatEnum) (ciphertext string, e
 		return "", errors.New("mode not exist")
 	}
 	mode := v.(AbstractMode)
-	cipherByte, err := mode.Encrypt(plainText, []byte(a.Key), []byte(a.Iv), int(a.Padding))
+	cipherByte, err := mode.Encrypt(plainText, []byte(a.Key), []byte(a.Iv), []byte(a.Nonce), []byte(a.AdditionalData), int(a.Padding))
 	if err != nil {
 		return "", err
 	}
 
-	ciphertext = util.PackDataToStr(cipherByte, string(format))
+	ciphertext = utils.PackDataToStr(cipherByte, string(format))
 	return
 }
 
@@ -45,7 +47,7 @@ func (a *Aes) Decrypt(cipherText string, format FormatEnum) (plainByte []byte, e
 	if cipherText == "" {
 		return nil, errors.New("empty cipherText")
 	}
-	cipherByte, err := util.PackDataToByte(cipherText, string(format))
+	cipherByte, err := utils.PackDataToByte(cipherText, string(format))
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (a *Aes) Decrypt(cipherText string, format FormatEnum) (plainByte []byte, e
 		return nil, errors.New("mode not exist")
 	}
 	mode := v.(AbstractMode)
-	plainByte, err = mode.Decrypt(cipherByte, []byte(a.Key), []byte(a.Iv), int(a.Padding))
+	plainByte, err = mode.Decrypt(cipherByte, []byte(a.Key), []byte(a.Iv), []byte(a.Nonce), []byte(a.AdditionalData), int(a.Padding))
 
 	return
 }
