@@ -21,6 +21,22 @@ func TestCBCDecrypt(t *testing.T) {
 	fmt.Println(err)
 }
 
+func TestGCMEncrypt(t *testing.T) {
+	aes := &Aes{Mode: "GCM", Key: "zjkjhuhuhsjhuhjq", Nonce: "qiajdhfyrhfg", AdditionalData: "kkk"}
+	msg := `我会找到你`
+	cc, err := aes.Encrypt([]byte(msg), Base64)
+	fmt.Println(cc)
+	fmt.Println(err)
+}
+
+func TestGCMDecrypt(t *testing.T) {
+	aes := &Aes{Mode: "GCM", Key: "zjkjhuhuhsjhuhjq", Nonce: "qiajdhfyrhfg", AdditionalData: "kkk"}
+	msg := "fcR0HFOe5brxFF1Llq0YQETXA05fO20mLasMv/f9kg=="
+	cc, err := aes.Decrypt(msg, Base64)
+	fmt.Println(string(cc))
+	fmt.Println(err)
+}
+
 func TestECBEncrypt(t *testing.T) {
 	aes := &Aes{Mode: "ECB", Key: "zjkjhuhuhsjhuhjq", Iv: "qowieurjfhturjfh", Padding: PKCS7}
 	msg := `飞流直是九天飞银河落九天飞流直下三千尺, 疑是银河落九天飞流直下三千尺, 疑是是银河落九天`
