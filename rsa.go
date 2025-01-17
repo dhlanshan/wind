@@ -153,7 +153,7 @@ func (r *Rsa) GenSerialNumber() *big.Int {
 
 // BuildCert generates a certificate from a template and signs it with the parent's private key.
 func (r *Rsa) BuildCert(template, parentCert *x509.Certificate, parentPrivateKey *rsa.PrivateKey) error {
-	certBytes, err := x509.CreateCertificate(rand.Reader, template, parentCert, parentPrivateKey.PublicKey, parentPrivateKey)
+	certBytes, err := x509.CreateCertificate(rand.Reader, template, parentCert, &parentPrivateKey.PublicKey, parentPrivateKey)
 	if err != nil {
 		return err
 	}
