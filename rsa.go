@@ -177,6 +177,7 @@ func (r *Rsa) LoadCert(certPEM []byte) error {
 		return err
 	}
 	r.certificate = cert
+	r.publicKey = cert.PublicKey.(*rsa.PublicKey)
 
 	return nil
 }
