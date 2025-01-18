@@ -182,6 +182,22 @@ func (r *Rsa) LoadCert(certPEM []byte) error {
 	return nil
 }
 
+// LoadCertByRaw Load RSA certificate from raw data.
+func (r *Rsa) LoadCertByRaw(raw string, format FormatEnum) error {
+	rawByte, err := utils.PackDataToByte(raw, string(format))
+	if err != nil {
+		return err
+	}
+	cert, err := x509.ParseCertificate(rawByte)
+	if err != nil {
+		return err
+	}
+	r.certificate = cert
+	r.publicKey = cert.PublicKey.(*rsa.PublicKey)
+
+	return nil
+}
+
 // LoadCertByFile loads an RSA certificate from a PEM-encoded file.
 func (r *Rsa) LoadCertByFile(certFile string) error {
 	if certFile == "" {
