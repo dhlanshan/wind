@@ -291,6 +291,7 @@ func (r *Rsa) SaveCert(dir, filename string) error {
 // rootCerts: trusted root CA certificates
 // intermediateCerts: intermediate CA certificates used for chain building
 // opts: optional verification options; if nil, defaults are used (current time, ExtKeyUsageAny)
+// chains: each chain is ordered from leaf to root, e.g. [Leaf, Intermediate, Root]
 func (r *Rsa) VerifyCert(rootCerts, intermediateCerts []*x509.Certificate, opts *x509.VerifyOptions) (chains [][]*x509.Certificate, err error) {
 	if r.certificate == nil {
 		return nil, errors.New("certificate is nil")
@@ -307,6 +308,7 @@ func (r *Rsa) VerifyCert(rootCerts, intermediateCerts []*x509.Certificate, opts 
 // VerifyCertWithParents verifies the current certificate against the provided parent certificates.
 // It automatically classifies parent certificates: self-signed (Issuer == Subject) and IsCA=true
 // are treated as root certificates, the rest as intermediates.
+// chains: each chain is ordered from leaf to root, e.g. [Leaf, Intermediate, Root]
 func (r *Rsa) VerifyCertWithParents(parentCerts []*x509.Certificate) (chains [][]*x509.Certificate, err error) {
 	var rootCerts, intermediateCerts []*x509.Certificate
 	for _, cert := range parentCerts {
@@ -324,6 +326,7 @@ func (r *Rsa) VerifyCertWithParents(parentCerts []*x509.Certificate) (chains [][
 // r.certificate is automatically added to the appropriate pool (root pool if self-signed CA,
 // intermediate pool otherwise). Additional root and intermediate certificates can be provided
 // to complete the chain.
+// chains: each chain is ordered from leaf to root, e.g. [Child, Intermediate, Root]
 func (r *Rsa) VerifyChildCert(childCert *x509.Certificate, rootCerts, intermediateCerts []*x509.Certificate, opts *x509.VerifyOptions) (chains [][]*x509.Certificate, err error) {
 	if r.certificate == nil {
 		return nil, errors.New("certificate is nil")
