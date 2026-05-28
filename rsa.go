@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/dhlanshan/wind/internal/tools"
 	"github.com/dhlanshan/wind/internal/utils"
@@ -285,6 +286,67 @@ func (r *Rsa) SaveCert(dir, filename string) error {
 	return pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: r.certificate.Raw})
 }
 
+// VerifyCert verifies the current certificate by building and validating a certificate chain
+// against the provided root and intermediate certificates.
+// rootCerts: trusted root CA certificates
+// intermediateCerts: intermediate CA certificates used for chain building
+// opts: optional verification options; if nil, defaults are used (current time, ExtKeyUsageAny)
+func (r *Rsa) VerifyCert(rootCerts, intermediateCerts []*x509.Certificate, opts *x509.VerifyOptions) (chains [][]*x509.Certificate, err error) {
+	if r.certificate == nil {
+		return nil, errors.New("certificate is nil")
+	}
+
+	verifyOpts, err := r.buildVerifyOptions(rootCerts, intermediateCerts, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.certificate.Verify(verifyOpts)
+}
+
+// VerifyCertWithParents verifies the current certificate against the provided parent certificates.
+// It automatically classifies parent certificates: self-signed (Issuer == Subject) and IsCA=true
+// are treated as root certificates, the rest as intermediates.
+func (r *Rsa) VerifyCertWithParents(parentCerts []*x509.Certificate) (chains [][]*x509.Certificate, err error) {
+	var rootCerts, intermediateCerts []*x509.Certificate
+	for _, cert := range parentCerts {
+		if cert.IsCA && cert.CheckSignatureFrom(cert) == nil {
+			rootCerts = append(rootCerts, cert)
+		} else {
+			intermediateCerts = append(intermediateCerts, cert)
+		}
+	}
+
+	return r.VerifyCert(rootCerts, intermediateCerts, nil)
+}
+
+// VerifyChildCert uses the current certificate as the issuer to verify a child certificate.
+// r.certificate is automatically added to the appropriate pool (root pool if self-signed CA,
+// intermediate pool otherwise). Additional root and intermediate certificates can be provided
+// to complete the chain.
+func (r *Rsa) VerifyChildCert(childCert *x509.Certificate, rootCerts, intermediateCerts []*x509.Certificate, opts *x509.VerifyOptions) (chains [][]*x509.Certificate, err error) {
+	if r.certificate == nil {
+		return nil, errors.New("certificate is nil")
+	}
+	if childCert == nil {
+		return nil, errors.New("child certificate is nil")
+	}
+
+	// Auto-classify r.certificate into root or intermediate pool
+	if r.certificate.IsCA && r.certificate.CheckSignatureFrom(r.certificate) == nil {
+		rootCerts = append(rootCerts, r.certificate)
+	} else {
+		intermediateCerts = append(intermediateCerts, r.certificate)
+	}
+
+	verifyOpts, err := r.buildVerifyOptions(rootCerts, intermediateCerts, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return childCert.Verify(verifyOpts)
+}
+
 // Sign signs a message using the private key, the specified signing type, hash type, and format.
 func (r *Rsa) Sign(msg []byte, signType SignTypeEnum, hashType HashTypeEnum, format FormatEnum, opts *rsa.PSSOptions) (ciphertext string, err error) {
 	if len(msg) == 0 {
@@ -539,4 +601,37 @@ func (r *Rsa) hashData(msg []byte, hashType HashTypeEnum) (hashed []byte, sha cr
 	}
 
 	return
+}
+
+// buildVerifyOptions constructs verification options by merging the provided certificate pools
+// with optional custom options.
+func (r *Rsa) buildVerifyOptions(rootCerts, intermediateCerts []*x509.Certificate, opts *x509.VerifyOptions) (x509.VerifyOptions, error) {
+	verifyOpts := x509.VerifyOptions{
+		CurrentTime: time.Now(),
+		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}
+	if opts != nil {
+		verifyOpts = *opts
+	}
+
+	if len(rootCerts) > 0 {
+		roots := x509.NewCertPool()
+		for _, cert := range rootCerts {
+			roots.AddCert(cert)
+		}
+		verifyOpts.Roots = roots
+	}
+	if verifyOpts.Roots == nil {
+		return x509.VerifyOptions{}, errors.New("root certificates are required")
+	}
+
+	if len(intermediateCerts) > 0 {
+		intermediates := x509.NewCertPool()
+		for _, cert := range intermediateCerts {
+			intermediates.AddCert(cert)
+		}
+		verifyOpts.Intermediates = intermediates
+	}
+
+	return verifyOpts, nil
 }
