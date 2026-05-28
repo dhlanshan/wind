@@ -11,12 +11,19 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/dhlanshan/wind/internal/tools"
-	"github.com/dhlanshan/wind/internal/utils"
 	"math/big"
 	"os"
 	"path/filepath"
+
+	"github.com/dhlanshan/wind/internal/tools"
+	"github.com/dhlanshan/wind/internal/utils"
 )
+
+var hashToCrypto = map[HashTypeEnum]crypto.Hash{
+	Sha1:   crypto.SHA1,
+	Sha256: crypto.SHA256,
+	Sha512: crypto.SHA512,
+}
 
 type Rsa struct {
 	bits        RsaKeySizeEnum    // Key size (e.g., 2048, 4096)
@@ -50,6 +57,7 @@ func (r *Rsa) GenerateKey(bits RsaKeySizeEnum) error {
 	r.bits = bits
 	r.privateKey = privateKey
 	r.publicKey = &privateKey.PublicKey
+	r.certificate = nil
 
 	return nil
 }
@@ -61,11 +69,21 @@ func (r *Rsa) LoadKey(keyPem []byte) error {
 		return err
 	}
 	if privateKey != nil {
+		// 如果已经有证书信息则校验秘钥对和证书是否一致
+		if r.certificate != nil && !r.publicKey.Equal(&privateKey.PublicKey) {
+			return fmt.Errorf("密钥对和当前的证书不匹配")
+		}
+
 		r.privateKey = privateKey
 		r.publicKey = &privateKey.PublicKey
-		r.bits = RsaKeySizeEnum(r.privateKey.N.BitLen())
+		r.bits = RsaKeySizeEnum(r.publicKey.N.BitLen())
 	}
 	if publicKey != nil {
+		// 如果已经有证书信息则校验秘钥对和证书是否一致
+		if r.certificate != nil && !r.publicKey.Equal(publicKey) {
+			return fmt.Errorf("密钥对和当前的证书不匹配")
+		}
+		r.privateKey = nil
 		r.publicKey = publicKey
 		r.bits = RsaKeySizeEnum(publicKey.N.BitLen())
 	}
@@ -169,16 +187,29 @@ func (r *Rsa) BuildCert(template, parentCert *x509.Certificate, parentPrivateKey
 // LoadCert loads an RSA certificate from a PEM-encoded byte slice.
 func (r *Rsa) LoadCert(certPEM []byte) error {
 	block, _ := pem.Decode(certPEM)
-	if block.Type != "CERTIFICATE" {
+	if block == nil || block.Type != "CERTIFICATE" {
 		return errors.New("the kind of PEM should be CERTIFICATE")
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return err
 	}
-	r.certificate = cert
-	r.publicKey = cert.PublicKey.(*rsa.PublicKey)
+	certPub, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return errors.New("certificate public key is not RSA")
+	}
+	// 如果当前rsa没有任何秘钥对,则使用证书的公钥
+	if r.publicKey == nil {
+		r.certificate = cert
+		r.publicKey = certPub
+		return nil
+	}
+	// 如果当前rsa有密钥对,则校验和证书是否是一套
+	if !r.publicKey.Equal(certPub) {
+		return fmt.Errorf("无法加载证书信息, 该证书不是当前的密钥对所构建")
+	}
 
+	r.certificate = cert
 	return nil
 }
 
@@ -192,9 +223,22 @@ func (r *Rsa) LoadCertByRaw(raw string, format FormatEnum) error {
 	if err != nil {
 		return err
 	}
-	r.certificate = cert
-	r.publicKey = cert.PublicKey.(*rsa.PublicKey)
+	certPub, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return errors.New("certificate public key is not RSA")
+	}
+	// 如果当前rsa没有任何秘钥对,则使用证书的公钥
+	if r.publicKey == nil {
+		r.certificate = cert
+		r.publicKey = certPub
+		return nil
+	}
+	// 如果当前rsa有密钥对,则校验和证书是否是一套
+	if !r.publicKey.Equal(certPub) {
+		return fmt.Errorf("无法加载证书信息, 该证书不是当前的密钥对所构建")
+	}
 
+	r.certificate = cert
 	return nil
 }
 
@@ -288,8 +332,8 @@ func (r *Rsa) VerifySign(msg []byte, ciphertext string, signType SignTypeEnum, h
 	if !tools.InSlice([]FormatEnum{Str, Hex, Base64, Base64Url, Base64RawUrl}, format) {
 		return errors.New("invalid format")
 	}
-	if r.privateKey == nil {
-		return errors.New("private key is nil")
+	if r.publicKey == nil {
+		return errors.New("publicKey key is nil")
 	}
 
 	signData, err := utils.PackDataToByte(ciphertext, string(format))
@@ -304,9 +348,9 @@ func (r *Rsa) VerifySign(msg []byte, ciphertext string, signType SignTypeEnum, h
 
 	switch signType {
 	case PKCS1v15:
-		err = rsa.VerifyPKCS1v15(&r.privateKey.PublicKey, sha, hashed, signData)
+		err = rsa.VerifyPKCS1v15(r.publicKey, sha, hashed, signData)
 	case PSS:
-		err = rsa.VerifyPSS(&r.privateKey.PublicKey, sha, hashed, signData, opts)
+		err = rsa.VerifyPSS(r.publicKey, sha, hashed, signData, opts)
 	}
 
 	return
@@ -328,8 +372,7 @@ func (r *Rsa) Encrypt(plainText []byte, padding CryptoPaddingEnum, hashType Hash
 		return "", errors.New("public key is nil")
 	}
 
-	hashMap := map[HashTypeEnum]crypto.Hash{Sha1: crypto.SHA1, Sha256: crypto.SHA256, Sha512: crypto.SHA512}
-	sha, ok := hashMap[hashType]
+	sha, ok := hashToCrypto[hashType]
 	if !ok {
 		return "", errors.New("invalid hash type")
 	}
@@ -370,8 +413,7 @@ func (r *Rsa) Decrypt(ciphertext string, padding CryptoPaddingEnum, hashType Has
 		return nil, err
 	}
 
-	hashMap := map[HashTypeEnum]crypto.Hash{Sha1: crypto.SHA1, Sha256: crypto.SHA256, Sha512: crypto.SHA512}
-	sha, ok := hashMap[hashType]
+	sha, ok := hashToCrypto[hashType]
 	if !ok {
 		return nil, errors.New("invalid hash type")
 	}
@@ -399,9 +441,14 @@ func (r *Rsa) marshalKey(format KeyFormatEnum) (priBlock, pubBlock *pem.Block, e
 	switch format {
 	case PKCS1:
 		priKeyDer = x509.MarshalPKCS1PrivateKey(r.privateKey)
+		pubKeyDer = x509.MarshalPKCS1PublicKey(&r.privateKey.PublicKey)
 		priType, pubType = string(PrivatePKCS1Pem), string(PublicPKCS1Pem)
 	case PKCS8:
 		priKeyDer, err = x509.MarshalPKCS8PrivateKey(r.privateKey)
+		if err != nil {
+			break
+		}
+		pubKeyDer, err = x509.MarshalPKIXPublicKey(&r.privateKey.PublicKey)
 		priType, pubType = string(PrivatePKCS8Pem), string(PublicPKCS8Pem)
 	default:
 		err = fmt.Errorf("unsupported key format: %s", format)
@@ -411,11 +458,6 @@ func (r *Rsa) marshalKey(format KeyFormatEnum) (priBlock, pubBlock *pem.Block, e
 	}
 
 	priBlock = &pem.Block{Type: priType, Bytes: priKeyDer}
-
-	pubKeyDer, err = x509.MarshalPKIXPublicKey(&r.privateKey.PublicKey)
-	if err != nil {
-		return nil, nil, err
-	}
 	pubBlock = &pem.Block{Type: pubType, Bytes: pubKeyDer}
 
 	return
@@ -436,17 +478,35 @@ func (r *Rsa) parseKey(keyPem []byte) (privateKey *rsa.PrivateKey, publicKey *rs
 		case PrivatePKCS8Pem:
 			var p8Key any
 			p8Key, err = x509.ParsePKCS8PrivateKey(block.Bytes)
-			if pk, ok := p8Key.(*rsa.PrivateKey); ok {
+			if err != nil {
+				break
+			}
+			pk, ok := p8Key.(*rsa.PrivateKey)
+			if !ok {
+				err = errors.New("not an RSA private key")
+			} else {
 				privateKey = pk
 			}
+
 		default:
 			err = fmt.Errorf("unsupported key format: %s", format)
 		}
 	} else if tools.InSlice(PublicPemList(), format) {
-		var pub any
-		pub, err = x509.ParsePKIXPublicKey(block.Bytes)
-		if pk, ok := pub.(*rsa.PublicKey); ok {
-			publicKey = pk
+		switch format {
+		case PublicPKCS1Pem:
+			publicKey, err = x509.ParsePKCS1PublicKey(block.Bytes)
+		case PublicPKCS8Pem:
+			var pub any
+			pub, err = x509.ParsePKIXPublicKey(block.Bytes)
+			if err == nil {
+				var ok bool
+				publicKey, ok = pub.(*rsa.PublicKey)
+				if !ok {
+					err = errors.New("not an RSA public key")
+				}
+			}
+		default:
+			err = fmt.Errorf("unsupported key format: %s", format)
 		}
 	} else {
 		err = fmt.Errorf("unsupported key format: %s", format)
